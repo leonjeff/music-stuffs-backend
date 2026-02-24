@@ -11,9 +11,11 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { VideoService } from './video.service';
 
-@Controller('video')
+@Controller('videos')
 export class VideoController {
   constructor(private readonly videoService: VideoService) {}
+
+  // ─── Upload ────────────────────────────────────────────────────────────────
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
@@ -24,32 +26,73 @@ export class VideoController {
     return this.videoService.handleUpload(file, teacherId);
   }
 
-  @Get(':id')
-  async getVideo(@Param('id') id: string) {
-    return this.videoService.findById(id);
-  }
+  // ─── Estado ────────────────────────────────────────────────────────────────
 
+  /**
+   * Devuelve el estado de procesamiento y todas las rutas de archivos.
+   * Incluye durationMs para loop sample-accurate en el frontend.
+   *
+   * GET /videos/:id/status
+   */
   @Get(':id/status')
-  async getVideoStatus(@Param('id') id: string) {
+  async getStatus(@Param('id') id: string) {
     return this.videoService.getStatus(id);
   }
 
-  @Get(':id/stream')
-  async streamVideo(@Param('id') id: string) {
-    return this.videoService.getStream(id);
+  // ─── Audio ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Devuelve el archivo WAV sin compresión para procesamiento en el frontend.
+   * (PCM 16-bit, 44.1 kHz, estéreo)
+   *
+   * Usar para: pitch shifting, transpose, análisis espectral, Web Audio API.
+   * El backend NO aplica ninguna transformación — el audio es el original.
+   *
+   * GET /videos/:id/audio
+   */
+  @Get(':id/audio')
+  @Header('Cache-Control', 'public, max-age=31536000, immutable')
+  @Header('Accept-Ranges', 'bytes')
+  async getAudio(@Param('id') id: string) {
+    return this.videoService.getAudioFile(id);
   }
 
-  /** Waveform principal (high-res para videos cortos, high-res para videos largos) */
+  // ─── Waveform ──────────────────────────────────────────────────────────────
+
+  /**
+   * Devuelve el waveform JSON decimado (high-res).
+   * Para videos > 1 hora, este es el waveform de detalle/zoom.
+   *
+   * GET /videos/:id/waveform
+   */
   @Get(':id/waveform')
   @Header('Cache-Control', 'public, max-age=31536000, immutable')
   async getWaveform(@Param('id') id: string) {
     return this.videoService.getWaveformFile(id, 'high');
   }
 
-  /** Waveform low-res — solo disponible para videos > 1 hora */
+  /**
+   * Devuelve el waveform low-res (overview).
+   * Solo disponible en videos > 1 hora.
+   *
+   * GET /videos/:id/waveform/low
+   */
   @Get(':id/waveform/low')
   @Header('Cache-Control', 'public, max-age=31536000, immutable')
   async getWaveformLow(@Param('id') id: string) {
     return this.videoService.getWaveformFile(id, 'low');
+  }
+
+  // ─── HLS stream (para reproductores que no usan /media directamente) ───────
+
+  /**
+   * Devuelve el master playlist HLS como StreamableFile.
+   * Alternativa a acceder directamente a {{mediaUrl}}/:id/index.m3u8.
+   *
+   * GET /videos/:id/stream
+   */
+  @Get(':id/stream')
+  async getStream(@Param('id') id: string) {
+    return this.videoService.getStream(id);
   }
 }

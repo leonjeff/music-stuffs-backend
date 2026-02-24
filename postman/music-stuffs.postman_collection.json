@@ -2,7 +2,7 @@
   "info": {
     "name": "Music Stuffs API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "API REST para la plataforma educativa de música.\n\nDos tipos de acceso:\n  - {{baseUrl}}  → endpoints JSON (subir, consultar estado, loops, variantes)\n  - {{mediaUrl}} → archivos estáticos (HLS, audio, waveform, thumbnail)"
+    "description": "API REST para la plataforma educativa de música.\n\nDos tipos de acceso:\n  - {{baseUrl}}  → endpoints JSON (subir, consultar estado, loops, variantes)\n  - {{mediaUrl}} → archivos estáticos (HLS, audio, waveform, thumbnail, metadata)\n\nFlujo principal:\n  1. POST /videos/upload → { id }\n  2. GET  /videos/:id/status (polling hasta status=ready)\n  3. Reproducir HLS desde {{mediaUrl}}/{{videoId}}/index.m3u8\n  4. Cargar WAV desde GET /videos/:id/audio (para pitch/transpose en frontend)\n  5. Cargar waveform desde GET /videos/:id/waveform"
   },
   "variable": [
     {
@@ -38,14 +38,14 @@
   ],
   "item": [
     {
-      "name": "1 · Video — API",
-      "description": "Endpoints JSON para subir y consultar videos. Los paths devueltos son relativos; el frontend construye las URLs estáticas como {{mediaUrl}}/{path}.",
+      "name": "1 · Videos — API",
+      "description": "Endpoints JSON para subir y consultar videos.\n\nLos paths devueltos son relativos a VIDEO_BASE_DIR.\nEl frontend construye las URLs estáticas como {{mediaUrl}}/{path}.\n\nEl campo durationMs es la duración con precisión de milisegundos,\nútil para loop sample-accurate y sincronización audio/video.",
       "item": [
         {
           "name": "Upload video",
           "request": {
             "method": "POST",
-            "url": "{{baseUrl}}/video/upload",
+            "url": "{{baseUrl}}/videos/upload",
             "header": [
               {
                 "key": "x-teacher-id",
@@ -91,33 +91,13 @@
           ]
         },
         {
-          "name": "Get video by ID",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{baseUrl}}/video/{{videoId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["video", "{{videoId}}"]
-            }
-          },
-          "response": [
-            {
-              "name": "200 – Video completo (ready)",
-              "status": "OK",
-              "code": 200,
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"id\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n  \"status\": \"ready\",\n  \"originalFilename\": \"clase-guitarra.mp4\",\n  \"size\": 104857600,\n  \"mimeType\": \"video/mp4\",\n  \"duration\": 225,\n  \"resolution\": \"1920x1080\",\n  \"hlsPath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/master.m3u8\",\n  \"thumbnailPath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/thumbnail.jpg\",\n  \"audioMp3Path\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/audio.mp3\",\n  \"audioWavPath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/audio.wav\",\n  \"waveformPath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/waveform.json\",\n  \"waveformLowPath\": null,\n  \"processingAttempts\": 1,\n  \"createdAt\": \"2026-02-23T00:00:00.000Z\"\n}"
-            }
-          ]
-        },
-        {
           "name": "Get video status (polling)",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/video/{{videoId}}/status",
+              "raw": "{{baseUrl}}/videos/{{videoId}}/status",
               "host": ["{{baseUrl}}"],
-              "path": ["video", "{{videoId}}", "status"]
+              "path": ["videos", "{{videoId}}", "status"]
             }
           },
           "response": [
@@ -126,14 +106,14 @@
               "status": "OK",
               "code": 200,
               "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"id\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n  \"status\": \"processing\",\n  \"hlsPath\": null,\n  \"thumbnailPath\": null,\n  \"audioMp3Path\": null,\n  \"audioWavPath\": null,\n  \"waveformPath\": null,\n  \"waveformLowPath\": null,\n  \"duration\": null,\n  \"resolution\": null,\n  \"processingAttempts\": 1\n}"
+              "body": "{\n  \"id\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n  \"status\": \"processing\",\n  \"originalFilename\": \"clase-guitarra.mp4\",\n  \"durationMs\": null,\n  \"durationSeconds\": null,\n  \"resolution\": null,\n  \"hlsPath\": null,\n  \"audioWavPath\": null,\n  \"waveformPath\": null,\n  \"waveformLowPath\": null,\n  \"metadataPath\": null,\n  \"thumbnailPath\": null,\n  \"processingAttempts\": 1\n}"
             },
             {
               "name": "200 – ready",
               "status": "OK",
               "code": 200,
               "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"id\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n  \"status\": \"ready\",\n  \"hlsPath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/master.m3u8\",\n  \"thumbnailPath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/thumbnail.jpg\",\n  \"audioMp3Path\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/audio.mp3\",\n  \"audioWavPath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/audio.wav\",\n  \"waveformPath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/waveform.json\",\n  \"waveformLowPath\": null,\n  \"duration\": 225,\n  \"resolution\": \"1920x1080\",\n  \"processingAttempts\": 1\n}"
+              "body": "{\n  \"id\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n  \"status\": \"ready\",\n  \"originalFilename\": \"clase-guitarra.mp4\",\n  \"durationMs\": 225340,\n  \"durationSeconds\": 225.34,\n  \"resolution\": \"1920x1080\",\n  \"hlsPath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/index.m3u8\",\n  \"audioWavPath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/audio.wav\",\n  \"waveformPath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/waveform.json\",\n  \"waveformLowPath\": null,\n  \"metadataPath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/metadata.json\",\n  \"thumbnailPath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/thumbnail.jpg\",\n  \"processingAttempts\": 1\n}"
             },
             {
               "name": "200 – failed",
@@ -145,65 +125,125 @@
           ]
         },
         {
-          "name": "Get waveform JSON (high-res) – API con cache",
+          "name": "Get audio WAV (pitch/transpose en frontend)",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/video/{{videoId}}/waveform",
+              "raw": "{{baseUrl}}/videos/{{videoId}}/audio",
               "host": ["{{baseUrl}}"],
-              "path": ["video", "{{videoId}}", "waveform"]
-            }
+              "path": ["videos", "{{videoId}}", "audio"]
+            },
+            "description": "Devuelve el audio en PCM 16-bit, 44.1 kHz, estéreo.\nUsar con AudioContext.decodeAudioData() para pitch shifting / transpose en el frontend.\nEl backend NO modifica el audio — siempre es el original."
           },
           "response": [
             {
-              "name": "200 – waveform.json (video ≤ 1h)",
+              "name": "200 – audio/wav (PCM estéreo)",
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" },
-                { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+                { "key": "Content-Type", "value": "audio/wav" },
+                { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" },
+                { "key": "Accept-Ranges", "value": "bytes" }
               ],
-              "body": "{\n  \"version\": 2,\n  \"channels\": 1,\n  \"sample_rate\": 44100,\n  \"samples_per_pixel\": 512,\n  \"bits\": 8,\n  \"length\": 19296,\n  \"data\": [-5, 12, -18, 9, 22, -30, ...]\n}"
+              "body": "<binary WAV — PCM 16-bit 44.1 kHz estéreo>"
             },
             {
-              "name": "200 – waveform-high.json (video > 1h)",
-              "status": "OK",
-              "code": 200,
-              "header": [
-                { "key": "Content-Type", "value": "application/json" },
-                { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-              ],
-              "body": "{\n  \"version\": 2,\n  \"channels\": 1,\n  \"sample_rate\": 44100,\n  \"samples_per_pixel\": 16384,\n  \"bits\": 8,\n  \"length\": 20000,\n  \"data\": [-5, 12, -18, 9, ...]\n}"
+              "name": "400 – Video todavía processing",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"statusCode\": 400,\n  \"message\": \"Video no disponible (estado: processing)\"\n}"
+            },
+            {
+              "name": "404 – Sin audio (video mudo)",
+              "status": "Not Found",
+              "code": 404,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"statusCode\": 404,\n  \"message\": \"Audio WAV no disponible para este video\"\n}"
             }
           ]
         },
         {
-          "name": "Get waveform JSON (low-res, solo videos > 1h) – API",
+          "name": "Get waveform JSON (high-res)",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/video/{{videoId}}/waveform/low",
+              "raw": "{{baseUrl}}/videos/{{videoId}}/waveform",
               "host": ["{{baseUrl}}"],
-              "path": ["video", "{{videoId}}", "waveform", "low"]
+              "path": ["videos", "{{videoId}}", "waveform"]
             }
           },
           "response": [
             {
-              "name": "200 – waveform-low.json",
+              "name": "200 – waveform.json (video ≤ 1h, ~20 000 pts)",
               "status": "OK",
               "code": 200,
               "header": [
                 { "key": "Content-Type", "value": "application/json" },
                 { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
               ],
-              "body": "{\n  \"version\": 2,\n  \"channels\": 1,\n  \"sample_rate\": 44100,\n  \"samples_per_pixel\": 65536,\n  \"bits\": 8,\n  \"length\": 5000,\n  \"data\": [-3, 8, -12, 6, ...]\n}"
+              "body": "{\n  \"version\": 2,\n  \"channels\": 1,\n  \"sample_rate\": 44100,\n  \"samples_per_pixel\": 512,\n  \"bits\": 8,\n  \"length\": 19296,\n  \"data\": [-5, 12, -18, 9, 22, -30, \"...\"]\n}"
             },
             {
-              "name": "404 – Video menor a 1 hora (solo tiene waveform.json)",
+              "name": "200 – waveform-high.json (video > 1h, ~20 000 pts zoom)",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" },
+                { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+              ],
+              "body": "{\n  \"version\": 2,\n  \"channels\": 1,\n  \"sample_rate\": 44100,\n  \"samples_per_pixel\": 16384,\n  \"bits\": 8,\n  \"length\": 20000,\n  \"data\": [-5, 12, -18, 9, \"...\"]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get waveform JSON (low-res, solo videos > 1h)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/videos/{{videoId}}/waveform/low",
+              "host": ["{{baseUrl}}"],
+              "path": ["videos", "{{videoId}}", "waveform", "low"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 – waveform-low.json (~5 000 pts overview)",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type", "value": "application/json" },
+                { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+              ],
+              "body": "{\n  \"version\": 2,\n  \"channels\": 1,\n  \"sample_rate\": 44100,\n  \"samples_per_pixel\": 65536,\n  \"bits\": 8,\n  \"length\": 5000,\n  \"data\": [-3, 8, -12, 6, \"...\"]\n}"
+            },
+            {
+              "name": "404 – Video menor a 1 hora",
               "status": "Not Found",
               "code": 404,
               "header": [{ "key": "Content-Type", "value": "application/json" }],
               "body": "{\n  \"statusCode\": 404,\n  \"message\": \"Waveform low-res no disponible (el video puede ser menor a 1 hora)\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get HLS stream — API",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/videos/{{videoId}}/stream",
+              "host": ["{{baseUrl}}"],
+              "path": ["videos", "{{videoId}}", "stream"]
+            },
+            "description": "Alternativa API al acceso estático directo.\nPreferir {{mediaUrl}}/{{videoId}}/index.m3u8 para reproductores HLS."
+          },
+          "response": [
+            {
+              "name": "200 – application/vnd.apple.mpegurl",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/vnd.apple.mpegurl" }],
+              "body": "<playlist HLS>"
             }
           ]
         }
@@ -211,85 +251,54 @@
     },
     {
       "name": "2 · Archivos estáticos (/media)",
-      "description": "Acceso directo a los archivos generados. El HLS player del frontend debe usar estas URLs.\n\nPatrón: {{mediaUrl}}/{hlsPath} donde hlsPath viene del campo hlsPath en el response de status.",
+      "description": "Acceso directo a los archivos generados por Express static.\nEl reproductor HLS debe apuntar siempre a {{mediaUrl}}/{{videoId}}/index.m3u8.\n\nEstructura de archivos por video:\n  {videoId}/\n    index.m3u8        ← HLS playlist (VOD)\n    segment_000.ts    ← segmentos HLS (flat, sin subdirectorios)\n    segment_001.ts\n    audio.wav         ← PCM 16-bit 44.1 kHz estéreo\n    waveform.json     ← decimado ~20 000 pts\n    thumbnail.jpg\n    metadata.json     ← durationMs, resolution, audio specs",
       "item": [
         {
-          "name": "HLS – master.m3u8",
+          "name": "HLS – index.m3u8",
           "request": {
             "method": "GET",
-            "url": "{{mediaUrl}}/{{videoId}}/master.m3u8"
+            "url": "{{mediaUrl}}/{{videoId}}/index.m3u8"
           },
           "response": [
             {
-              "name": "200 – master.m3u8",
+              "name": "200 – HLS VOD playlist",
               "status": "OK",
               "code": 200,
               "header": [{ "key": "Content-Type", "value": "application/vnd.apple.mpegurl" }],
-              "body": "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080\n1080p.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=2800000,RESOLUTION=1280x720\n720p.m3u8\n#EXT-X-STREAM-INF:BANDWIDTH=1400000,RESOLUTION=854x480\n480p.m3u8"
+              "body": "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:4.000000,\nsegment_000.ts\n#EXTINF:4.000000,\nsegment_001.ts\n#EXTINF:4.000000,\nsegment_002.ts\n...\n#EXT-X-ENDLIST"
             }
           ]
         },
         {
-          "name": "HLS – 1080p.m3u8",
+          "name": "HLS – segment_000.ts",
           "request": {
             "method": "GET",
-            "url": "{{mediaUrl}}/{{videoId}}/1080p.m3u8"
+            "url": "{{mediaUrl}}/{{videoId}}/segment_000.ts"
           },
           "response": [
             {
-              "name": "200 – playlist 1080p",
+              "name": "200 – video/MP2T",
               "status": "OK",
               "code": 200,
-              "header": [{ "key": "Content-Type", "value": "application/vnd.apple.mpegurl" }],
-              "body": "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:4.000000,\n1080p/seg_000.ts\n#EXTINF:4.000000,\n1080p/seg_001.ts\n...\n#EXT-X-ENDLIST"
+              "header": [{ "key": "Content-Type", "value": "video/MP2T" }],
+              "body": "<binary TS segment>"
             }
           ]
         },
         {
-          "name": "HLS – 720p.m3u8",
+          "name": "Audio WAV (estático directo)",
           "request": {
             "method": "GET",
-            "url": "{{mediaUrl}}/{{videoId}}/720p.m3u8"
-          },
-          "response": []
-        },
-        {
-          "name": "HLS – 480p.m3u8",
-          "request": {
-            "method": "GET",
-            "url": "{{mediaUrl}}/{{videoId}}/480p.m3u8"
-          },
-          "response": []
-        },
-        {
-          "name": "Thumbnail",
-          "request": {
-            "method": "GET",
-            "url": "{{mediaUrl}}/{{videoId}}/thumbnail.jpg"
+            "url": "{{mediaUrl}}/{{videoId}}/audio.wav",
+            "description": "Alternativa estática a GET /videos/:id/audio.\nMisma respuesta — PCM 16-bit 44.1 kHz estéreo."
           },
           "response": [
             {
-              "name": "200 – image/jpeg",
+              "name": "200 – audio/wav",
               "status": "OK",
               "code": 200,
-              "header": [{ "key": "Content-Type", "value": "image/jpeg" }],
-              "body": "<binary JPEG>"
-            }
-          ]
-        },
-        {
-          "name": "Audio MP3",
-          "request": {
-            "method": "GET",
-            "url": "{{mediaUrl}}/{{videoId}}/audio.mp3"
-          },
-          "response": [
-            {
-              "name": "200 – audio/mpeg",
-              "status": "OK",
-              "code": 200,
-              "header": [{ "key": "Content-Type", "value": "audio/mpeg" }],
-              "body": "<binary MP3>"
+              "header": [{ "key": "Content-Type", "value": "audio/wav" }],
+              "body": "<binary WAV — PCM 16-bit 44.1 kHz estéreo>"
             }
           ]
         },
@@ -316,11 +325,44 @@
             "url": "{{mediaUrl}}/{{videoId}}/waveform-low.json"
           },
           "response": []
+        },
+        {
+          "name": "Metadata JSON",
+          "request": {
+            "method": "GET",
+            "url": "{{mediaUrl}}/{{videoId}}/metadata.json"
+          },
+          "response": [
+            {
+              "name": "200 – metadata.json",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n  \"originalFilename\": \"clase-guitarra.mp4\",\n  \"durationMs\": 225340,\n  \"durationSeconds\": 225.34,\n  \"resolution\": \"1920x1080\",\n  \"hasAudio\": true,\n  \"audio\": {\n    \"sampleRate\": 44100,\n    \"channels\": 2,\n    \"bitDepth\": 16,\n    \"format\": \"PCM\"\n  },\n  \"processedAt\": \"2026-02-24T00:00:00.000Z\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Thumbnail",
+          "request": {
+            "method": "GET",
+            "url": "{{mediaUrl}}/{{videoId}}/thumbnail.jpg"
+          },
+          "response": [
+            {
+              "name": "200 – image/jpeg",
+              "status": "OK",
+              "code": 200,
+              "header": [{ "key": "Content-Type", "value": "image/jpeg" }],
+              "body": "<binary JPEG>"
+            }
+          ]
         }
       ]
     },
     {
       "name": "3 · Loops A-B",
+      "description": "Creación y consulta de loops A-B por video.\nLos tiempos se expresan en segundos (float).\nUsar durationMs del status para validar que endTime no supera la duración.",
       "item": [
         {
           "name": "Create loop",
@@ -344,7 +386,7 @@
               "status": "Created",
               "code": 201,
               "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n  \"userId\": \"user-uuid-001\",\n  \"startTime\": 42.5,\n  \"endTime\": 78,\n  \"label\": \"Puente de la canción\",\n  \"isPublic\": false,\n  \"isRecommended\": false,\n  \"createdAt\": \"2026-02-23T00:10:00.000Z\",\n  \"updatedAt\": \"2026-02-23T00:10:00.000Z\"\n}"
+              "body": "{\n  \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n  \"userId\": \"user-uuid-001\",\n  \"startTime\": 42.5,\n  \"endTime\": 78,\n  \"label\": \"Puente de la canción\",\n  \"isPublic\": false,\n  \"isRecommended\": false,\n  \"createdAt\": \"2026-02-24T00:10:00.000Z\",\n  \"updatedAt\": \"2026-02-24T00:10:00.000Z\"\n}"
             },
             {
               "name": "400 – endTime <= startTime",
@@ -352,20 +394,6 @@
               "code": 400,
               "header": [{ "key": "Content-Type", "value": "application/json" }],
               "body": "{\n  \"statusCode\": 400,\n  \"message\": [\"endTime (30) debe ser mayor que startTime (42.5)\"]\n}"
-            },
-            {
-              "name": "400 – endTime supera duración del video",
-              "status": "Bad Request",
-              "code": 400,
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"statusCode\": 400,\n  \"message\": \"endTime (9999s) excede la duración del video (225s)\"\n}"
-            },
-            {
-              "name": "400 – Video no está ready",
-              "status": "Bad Request",
-              "code": 400,
-              "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"statusCode\": 400,\n  \"message\": \"El video no está listo para reproducción (estado: processing)\"\n}"
             }
           ]
         },
@@ -393,7 +421,7 @@
               "status": "OK",
               "code": 200,
               "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "[\n  {\n    \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n    \"userId\": \"user-uuid-001\",\n    \"startTime\": 42.5,\n    \"endTime\": 78,\n    \"label\": \"Puente de la canción\",\n    \"isPublic\": false,\n    \"isRecommended\": false,\n    \"createdAt\": \"2026-02-23T00:10:00.000Z\",\n    \"updatedAt\": \"2026-02-23T00:10:00.000Z\"\n  }\n]"
+              "body": "[\n  {\n    \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n    \"userId\": \"user-uuid-001\",\n    \"startTime\": 42.5,\n    \"endTime\": 78,\n    \"label\": \"Puente de la canción\",\n    \"isPublic\": false,\n    \"isRecommended\": false,\n    \"createdAt\": \"2026-02-24T00:10:00.000Z\",\n    \"updatedAt\": \"2026-02-24T00:10:00.000Z\"\n  }\n]"
             }
           ]
         },
@@ -405,12 +433,7 @@
               "raw": "{{baseUrl}}/video/{{videoId}}/loops?userId=user-uuid-001",
               "host": ["{{baseUrl}}"],
               "path": ["video", "{{videoId}}", "loops"],
-              "query": [
-                {
-                  "key": "userId",
-                  "value": "user-uuid-001"
-                }
-              ]
+              "query": [{ "key": "userId", "value": "user-uuid-001" }]
             }
           },
           "response": []
@@ -443,14 +466,14 @@
               "status": "Created",
               "code": 201,
               "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n  \"pitchShift\": 2,\n  \"tempo\": 1,\n  \"filePath\": null,\n  \"status\": \"processing\",\n  \"processingEngine\": null,\n  \"errorMessage\": null,\n  \"createdAt\": \"2026-02-23T00:15:00.000Z\"\n}"
+              "body": "{\n  \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n  \"pitchShift\": 2,\n  \"tempo\": 1,\n  \"filePath\": null,\n  \"status\": \"processing\",\n  \"processingEngine\": null,\n  \"errorMessage\": null,\n  \"createdAt\": \"2026-02-24T00:15:00.000Z\"\n}"
             },
             {
               "name": "200 – Cache hit (status: ready)",
               "status": "OK",
               "code": 200,
               "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "{\n  \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n  \"pitchShift\": 2,\n  \"tempo\": 1,\n  \"filePath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/processed/pitch+2.wav\",\n  \"status\": \"ready\",\n  \"processingEngine\": \"asetrate\",\n  \"errorMessage\": null,\n  \"createdAt\": \"2026-02-23T00:15:00.000Z\"\n}"
+              "body": "{\n  \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n  \"pitchShift\": 2,\n  \"tempo\": 1,\n  \"filePath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/processed/pitch+2.wav\",\n  \"status\": \"ready\",\n  \"processingEngine\": \"asetrate\",\n  \"errorMessage\": null,\n  \"createdAt\": \"2026-02-24T00:15:00.000Z\"\n}"
             },
             {
               "name": "400 – pitchShift=0 y tempo=1.0 (sin cambio)",
@@ -480,7 +503,7 @@
           "response": []
         },
         {
-          "name": "Generate – solo tempo 1.5x (sin cambio de pitch)",
+          "name": "Generate – solo tempo 1.5x",
           "request": {
             "method": "POST",
             "url": {
@@ -513,7 +536,7 @@
               "status": "OK",
               "code": 200,
               "header": [{ "key": "Content-Type", "value": "application/json" }],
-              "body": "[\n  {\n    \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n    \"pitchShift\": -3,\n    \"tempo\": 0.75,\n    \"filePath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/processed/pitch-3_tempo0.75.wav\",\n    \"status\": \"ready\",\n    \"processingEngine\": \"asetrate\",\n    \"errorMessage\": null,\n    \"createdAt\": \"2026-02-23T00:16:00.000Z\"\n  },\n  {\n    \"id\": \"c3d4e5f6-a7b8-9012-cdef-123456789012\",\n    \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n    \"pitchShift\": 2,\n    \"tempo\": 1,\n    \"filePath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/processed/pitch+2.wav\",\n    \"status\": \"ready\",\n    \"processingEngine\": \"asetrate\",\n    \"errorMessage\": null,\n    \"createdAt\": \"2026-02-23T00:15:00.000Z\"\n  }\n]"
+              "body": "[\n  {\n    \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n    \"pitchShift\": -3,\n    \"tempo\": 0.75,\n    \"filePath\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298/processed/pitch-3_tempo0.75.wav\",\n    \"status\": \"ready\",\n    \"processingEngine\": \"asetrate\",\n    \"errorMessage\": null,\n    \"createdAt\": \"2026-02-24T00:16:00.000Z\"\n  }\n]"
             }
           ]
         },

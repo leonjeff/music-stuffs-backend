@@ -17,32 +17,43 @@ export class Video {
   @Column()
   mimeType: string;
 
-  @Column({ nullable: true })
-  duration: number;
+  /** Duración en milisegundos con precisión de milisegundos */
+  @Column({ nullable: true, type: 'float' })
+  durationMs: number | null;
 
-  @Column({ nullable: true })
-  resolution: string;
+  /** Duración en segundos — entero (compatibilidad; usar durationMs para precisión) */
+  @Column({ nullable: true, type: 'integer' })
+  duration: number | null;
 
-  @Column({ nullable: true })
-  hlsPath: string;
+  @Column({ nullable: true, type: 'varchar' })
+  resolution: string | null;
 
-  @Column({ nullable: true })
-  thumbnailPath: string;
+  /** Ruta relativa a VIDEO_BASE_DIR — ej: "{id}/index.m3u8" */
+  @Column({ nullable: true, type: 'varchar' })
+  hlsPath: string | null;
 
-  @Column({ nullable: true })
-  audioMp3Path: string;
+  /** Ruta relativa a VIDEO_BASE_DIR — ej: "{id}/audio.wav" */
+  @Column({ nullable: true, type: 'varchar' })
+  audioWavPath: string | null;
 
-  @Column({ nullable: true })
-  audioWavPath: string;
+  /** Ruta relativa a VIDEO_BASE_DIR — ej: "{id}/waveform.json" */
+  @Column({ nullable: true, type: 'varchar' })
+  waveformPath: string | null;
 
-  @Column({ nullable: true })
-  waveformPath: string;
+  /** Solo presente en videos > 1 hora */
+  @Column({ nullable: true, type: 'varchar' })
+  waveformLowPath: string | null;
 
-  @Column({ nullable: true })
-  waveformLowPath: string;
+  /** Ruta relativa a VIDEO_BASE_DIR — ej: "{id}/metadata.json" */
+  @Column({ nullable: true, type: 'varchar' })
+  metadataPath: string | null;
 
-  @Column({ nullable: true })
-  createdBy: string;
+  /** Ruta relativa a VIDEO_BASE_DIR — ej: "{id}/thumbnail.jpg" */
+  @Column({ nullable: true, type: 'varchar' })
+  thumbnailPath: string | null;
+
+  @Column({ nullable: true, type: 'varchar' })
+  createdBy: string | null;
 
   @Column({ default: 0 })
   processingAttempts: number;
