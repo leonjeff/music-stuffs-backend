@@ -2,7 +2,7 @@
   "info": {
     "name": "Music Stuffs API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "API REST para la plataforma educativa de música.\n\nDos tipos de acceso:\n  - {{baseUrl}}  → endpoints JSON (subir, consultar estado, loops, variantes)\n  - {{mediaUrl}} → archivos estáticos (HLS, audio, waveform, thumbnail, metadata)\n\nFlujo principal:\n  1. POST /videos/upload → { id }\n  2. GET  /videos/:id/status (polling hasta status=ready)\n  3. Reproducir HLS desde {{mediaUrl}}/{{videoId}}/index.m3u8\n  4. Cargar WAV desde GET /videos/:id/audio (para pitch/transpose en frontend)\n  5. Cargar waveform desde GET /videos/:id/waveform"
+    "description": "API REST para la plataforma educativa de música.\n\nDos tipos de acceso:\n  - {{baseUrl}}  → endpoints JSON (subir, consultar estado, loops, variantes, cursos)\n  - {{mediaUrl}} → archivos estáticos (HLS, audio, waveform, thumbnail, metadata)\n\nCORS permitido — headers extra requeridos para streaming:\n  - Range (range requests de audio/video)\n  - Content-Range, Accept-Ranges, Content-Length (expuestos al frontend)\n\nFlujo principal:\n  1. POST /videos/upload → { id }\n  2. GET  /videos/:id/status (polling hasta status=ready)\n  3. Reproducir HLS desde {{mediaUrl}}/{{videoId}}/index.m3u8\n  4. Cargar WAV desde GET /videos/:id/audio (para pitch/transpose en frontend)\n  5. Cargar waveform desde GET /videos/:id/waveform\n\nFlujo de cursos (teacher):\n  1. POST /teacher/courses → crear curso\n  2. POST /teacher/courses/:courseId/modules → crear módulos\n  3. POST /teacher/courses/:courseId/modules/:moduleId/lessons → crear lecciones\n     - preview:true → lección pública sin necesidad de matrícula\n     - duration → duración en segundos\n  4. POST /teacher/lessons/:lessonId/resources → adjuntar recursos"
   },
   "variable": [
     {
@@ -34,6 +34,30 @@
       "value": "",
       "type": "string",
       "description": "UUID de una variante de audio — copiar del response de Generate variant"
+    },
+    {
+      "key": "courseId",
+      "value": "",
+      "type": "string",
+      "description": "UUID de un curso — copiar del response de Create course"
+    },
+    {
+      "key": "moduleId",
+      "value": "",
+      "type": "string",
+      "description": "UUID de un módulo — copiar del response de Create module"
+    },
+    {
+      "key": "lessonId",
+      "value": "",
+      "type": "string",
+      "description": "UUID de una lección — copiar del response de Create lesson"
+    },
+    {
+      "key": "resourceId",
+      "value": "",
+      "type": "string",
+      "description": "UUID de un recurso — copiar del response de Create resource"
     }
   ],
   "item": [
@@ -142,7 +166,6 @@
               "code": 200,
               "header": [
                 { "key": "Content-Type", "value": "audio/wav" },
-                { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" },
                 { "key": "Accept-Ranges", "value": "bytes" }
               ],
               "body": "<binary WAV — PCM 16-bit 44.1 kHz estéreo>"
@@ -179,8 +202,7 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" },
-                { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+                { "key": "Content-Type", "value": "application/json" }
               ],
               "body": "{\n  \"version\": 2,\n  \"channels\": 1,\n  \"sample_rate\": 44100,\n  \"samples_per_pixel\": 512,\n  \"bits\": 8,\n  \"length\": 19296,\n  \"data\": [-5, 12, -18, 9, 22, -30, \"...\"]\n}"
             },
@@ -189,8 +211,7 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" },
-                { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+                { "key": "Content-Type", "value": "application/json" }
               ],
               "body": "{\n  \"version\": 2,\n  \"channels\": 1,\n  \"sample_rate\": 44100,\n  \"samples_per_pixel\": 16384,\n  \"bits\": 8,\n  \"length\": 20000,\n  \"data\": [-5, 12, -18, 9, \"...\"]\n}"
             }
@@ -212,8 +233,7 @@
               "status": "OK",
               "code": 200,
               "header": [
-                { "key": "Content-Type", "value": "application/json" },
-                { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+                { "key": "Content-Type", "value": "application/json" }
               ],
               "body": "{\n  \"version\": 2,\n  \"channels\": 1,\n  \"sample_rate\": 44100,\n  \"samples_per_pixel\": 65536,\n  \"bits\": 8,\n  \"length\": 5000,\n  \"data\": [-3, 8, -12, 6, \"...\"]\n}"
             },
@@ -617,6 +637,582 @@
               "code": 200,
               "header": [{ "key": "Content-Type", "value": "audio/wav" }],
               "body": "<binary WAV>"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5 · Teacher — My Courses",
+      "description": "CRUD completo de cursos, módulos, lecciones y recursos para docentes.\n\nTodos los endpoints requieren el header x-teacher-id.\nEl ownership se verifica en cada operación — 403 si el teacher no es dueño del recurso.\n\nJerarquía:\n  Course\n    └── Module  (position-ordered)\n          └── Lesson  (position-ordered, campos específicos de guitarra)\n                └── LessonResource  (PDF | TAB | BACKING_TRACK)\n\nEnums:\n  level:    BEGINNER | INTERMEDIATE | ADVANCED\n  category: ACOUSTIC | ELECTRIC | FINGERSTYLE | THEORY | OTHER\n  status:   DRAFT | PUBLISHED\n  type:     PDF | TAB | BACKING_TRACK\n\nSoft-delete: DELETE /teacher/courses/:courseId marca el curso como eliminado\n(deletedAt) sin borrar físicamente. Los módulos/lecciones/recursos se eliminan\nfísicamente con CASCADE en la BD.",
+      "item": [
+        {
+          "name": "Courses",
+          "item": [
+            {
+              "name": "Create course",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/courses",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "courses"]
+                },
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Guitarra Acústica para Principiantes\",\n  \"description\": \"Aprende los acordes básicos y técnicas fundamentales.\",\n  \"level\": \"BEGINNER\",\n  \"category\": \"ACOUSTIC\",\n  \"status\": \"DRAFT\",\n  \"thumbnailUrl\": null\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": [
+                {
+                  "name": "201 – Curso creado",
+                  "status": "Created",
+                  "code": 201,
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"id\": \"c1d2e3f4-0000-0000-0000-000000000001\",\n  \"teacherId\": \"teacher-uuid-001\",\n  \"title\": \"Guitarra Acústica para Principiantes\",\n  \"description\": \"Aprende los acordes básicos y técnicas fundamentales.\",\n  \"level\": \"BEGINNER\",\n  \"category\": \"ACOUSTIC\",\n  \"status\": \"DRAFT\",\n  \"thumbnailUrl\": null,\n  \"createdAt\": \"2026-02-25T10:00:00.000Z\",\n  \"updatedAt\": \"2026-02-25T10:00:00.000Z\",\n  \"deletedAt\": null\n}"
+                },
+                {
+                  "name": "400 – Validación fallida",
+                  "status": "Bad Request",
+                  "code": 400,
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"statusCode\": 400,\n  \"message\": [\"level must be one of the following values: BEGINNER, INTERMEDIATE, ADVANCED\"]\n}"
+                }
+              ]
+            },
+            {
+              "name": "List my courses",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/courses",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "courses"]
+                },
+                "header": [
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "description": "Devuelve cursos del teacher con sus módulos (sin lecciones ni recursos).\nOrdenados por createdAt DESC, módulos por position ASC."
+              },
+              "response": [
+                {
+                  "name": "200 – Lista de cursos",
+                  "status": "OK",
+                  "code": 200,
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "[\n  {\n    \"id\": \"c1d2e3f4-0000-0000-0000-000000000001\",\n    \"teacherId\": \"teacher-uuid-001\",\n    \"title\": \"Guitarra Acústica para Principiantes\",\n    \"description\": \"Aprende los acordes básicos y técnicas fundamentales.\",\n    \"level\": \"BEGINNER\",\n    \"category\": \"ACOUSTIC\",\n    \"status\": \"DRAFT\",\n    \"thumbnailUrl\": null,\n    \"modules\": [],\n    \"createdAt\": \"2026-02-25T10:00:00.000Z\",\n    \"updatedAt\": \"2026-02-25T10:00:00.000Z\",\n    \"deletedAt\": null\n  }\n]"
+                }
+              ]
+            },
+            {
+              "name": "Get course (árbol completo)",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/courses/{{courseId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "courses", "{{courseId}}"]
+                },
+                "header": [
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "description": "Devuelve el curso completo con módulos → lecciones → recursos.\nTodo ordenado por position ASC."
+              },
+              "response": [
+                {
+                  "name": "200 – Curso con árbol completo",
+                  "status": "OK",
+                  "code": 200,
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"id\": \"c1d2e3f4-0000-0000-0000-000000000001\",\n  \"teacherId\": \"teacher-uuid-001\",\n  \"title\": \"Guitarra Acústica para Principiantes\",\n  \"level\": \"BEGINNER\",\n  \"category\": \"ACOUSTIC\",\n  \"status\": \"DRAFT\",\n  \"modules\": [\n    {\n      \"id\": \"m1000000-0000-0000-0000-000000000001\",\n      \"title\": \"Módulo 1 — Acordes básicos\",\n      \"position\": 0,\n      \"lessons\": [\n        {\n          \"id\": \"l1000000-0000-0000-0000-000000000001\",\n          \"title\": \"Do mayor\",\n          \"position\": 0,\n          \"bpm\": 60,\n          \"difficulty\": 2,\n          \"tuning\": \"EADGBE\",\n          \"key\": \"C major\",\n          \"timeSignature\": \"4/4\",\n          \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n          \"resources\": [\n            {\n              \"id\": \"r1000000-0000-0000-0000-000000000001\",\n              \"type\": \"TAB\",\n              \"title\": \"Tablatura Do mayor\",\n              \"url\": \"https://cdn.example.com/tabs/do-mayor.pdf\",\n              \"position\": 0\n            }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+                },
+                {
+                  "name": "403 – No es tu curso",
+                  "status": "Forbidden",
+                  "code": 403,
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"statusCode\": 403,\n  \"message\": \"You do not own this course\"\n}"
+                },
+                {
+                  "name": "404 – Curso no encontrado",
+                  "status": "Not Found",
+                  "code": 404,
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"statusCode\": 404,\n  \"message\": \"Course c1d2e3f4-0000-0000-0000-000000000001 not found\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Update course",
+              "request": {
+                "method": "PATCH",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/courses/{{courseId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "courses", "{{courseId}}"]
+                },
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"PUBLISHED\",\n  \"title\": \"Guitarra Acústica para Principiantes — Edición 2026\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": [
+                {
+                  "name": "200 – Curso actualizado",
+                  "status": "OK",
+                  "code": 200,
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"id\": \"c1d2e3f4-0000-0000-0000-000000000001\",\n  \"title\": \"Guitarra Acústica para Principiantes — Edición 2026\",\n  \"status\": \"PUBLISHED\",\n  \"updatedAt\": \"2026-02-25T11:00:00.000Z\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Delete course (soft)",
+              "request": {
+                "method": "DELETE",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/courses/{{courseId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "courses", "{{courseId}}"]
+                },
+                "header": [
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "description": "Soft delete — establece deletedAt. El curso desaparece de List my courses.\nLos datos no se borran de la BD."
+              },
+              "response": [
+                {
+                  "name": "200 – Eliminado (void)",
+                  "status": "OK",
+                  "code": 200,
+                  "header": [],
+                  "body": ""
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Modules",
+          "item": [
+            {
+              "name": "Create module",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/courses/{{courseId}}/modules",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "courses", "{{courseId}}", "modules"]
+                },
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Módulo 1 — Acordes básicos\",\n  \"description\": \"Do, Re, Mi, Fa, Sol, La, Si\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": [
+                {
+                  "name": "201 – Módulo creado",
+                  "status": "Created",
+                  "code": 201,
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"id\": \"m1000000-0000-0000-0000-000000000001\",\n  \"courseId\": \"c1d2e3f4-0000-0000-0000-000000000001\",\n  \"title\": \"Módulo 1 — Acordes básicos\",\n  \"description\": \"Do, Re, Mi, Fa, Sol, La, Si\",\n  \"position\": 0,\n  \"createdAt\": \"2026-02-25T10:05:00.000Z\",\n  \"updatedAt\": \"2026-02-25T10:05:00.000Z\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "List modules",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/courses/{{courseId}}/modules",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "courses", "{{courseId}}", "modules"]
+                },
+                "header": [
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ]
+              },
+              "response": [
+                {
+                  "name": "200 – Lista ordenada por position",
+                  "status": "OK",
+                  "code": 200,
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "[\n  {\n    \"id\": \"m1000000-0000-0000-0000-000000000001\",\n    \"courseId\": \"c1d2e3f4-0000-0000-0000-000000000001\",\n    \"title\": \"Módulo 1 — Acordes básicos\",\n    \"description\": \"Do, Re, Mi, Fa, Sol, La, Si\",\n    \"position\": 0,\n    \"createdAt\": \"2026-02-25T10:05:00.000Z\",\n    \"updatedAt\": \"2026-02-25T10:05:00.000Z\"\n  }\n]"
+                }
+              ]
+            },
+            {
+              "name": "Reorder modules",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/courses/{{courseId}}/modules/reorder",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "courses", "{{courseId}}", "modules", "reorder"]
+                },
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ids\": [\n    \"m2000000-0000-0000-0000-000000000002\",\n    \"m1000000-0000-0000-0000-000000000001\"\n  ]\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "description": "El índice en el array determina la nueva position (0-based).\nTransaccional — todos los updates se aplican atomicamente."
+              },
+              "response": [
+                {
+                  "name": "200 – Reordenado (void)",
+                  "status": "OK",
+                  "code": 200,
+                  "header": [],
+                  "body": ""
+                }
+              ]
+            },
+            {
+              "name": "Update module",
+              "request": {
+                "method": "PATCH",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/courses/{{courseId}}/modules/{{moduleId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "courses", "{{courseId}}", "modules", "{{moduleId}}"]
+                },
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Módulo 1 — Acordes abiertos\",\n  \"description\": \"Los 7 acordes abiertos esenciales\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": [
+                {
+                  "name": "200 – Módulo actualizado",
+                  "status": "OK",
+                  "code": 200,
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"id\": \"m1000000-0000-0000-0000-000000000001\",\n  \"title\": \"Módulo 1 — Acordes abiertos\",\n  \"description\": \"Los 7 acordes abiertos esenciales\",\n  \"position\": 0,\n  \"updatedAt\": \"2026-02-25T11:05:00.000Z\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Delete module",
+              "request": {
+                "method": "DELETE",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/courses/{{courseId}}/modules/{{moduleId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "courses", "{{courseId}}", "modules", "{{moduleId}}"]
+                },
+                "header": [
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "description": "Hard delete con CASCADE — elimina también lecciones y recursos del módulo."
+              },
+              "response": [
+                {
+                  "name": "200 – Eliminado (void)",
+                  "status": "OK",
+                  "code": 200,
+                  "header": [],
+                  "body": ""
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Lessons",
+          "item": [
+            {
+              "name": "Create lesson",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/courses/{{courseId}}/modules/{{moduleId}}/lessons",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "courses", "{{courseId}}", "modules", "{{moduleId}}", "lessons"]
+                },
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Acorde de Do mayor\",\n  \"description\": \"Primera posición en el mástil.\",\n  \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n  \"duration\": 240,\n  \"preview\": false,\n  \"bpm\": 60,\n  \"difficulty\": 2,\n  \"tuning\": \"EADGBE\",\n  \"key\": \"C major\",\n  \"timeSignature\": \"4/4\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": [
+                {
+                  "name": "201 – Lección creada",
+                  "status": "Created",
+                  "code": 201,
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"id\": \"l1000000-0000-0000-0000-000000000001\",\n  \"moduleId\": \"m1000000-0000-0000-0000-000000000001\",\n  \"title\": \"Acorde de Do mayor\",\n  \"description\": \"Primera posición en el mástil.\",\n  \"videoId\": \"4042ee35-60b6-4e8a-8dc6-e21a86436298\",\n  \"duration\": 240,\n  \"preview\": false,\n  \"position\": 0,\n  \"bpm\": 60,\n  \"difficulty\": 2,\n  \"tuning\": \"EADGBE\",\n  \"key\": \"C major\",\n  \"timeSignature\": \"4/4\",\n  \"createdAt\": \"2026-02-25T10:10:00.000Z\",\n  \"updatedAt\": \"2026-02-25T10:10:00.000Z\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Reorder lessons",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/courses/{{courseId}}/modules/{{moduleId}}/lessons/reorder",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "courses", "{{courseId}}", "modules", "{{moduleId}}", "lessons", "reorder"]
+                },
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ids\": [\n    \"l2000000-0000-0000-0000-000000000002\",\n    \"l1000000-0000-0000-0000-000000000001\"\n  ]\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": [
+                {
+                  "name": "200 – Reordenado (void)",
+                  "status": "OK",
+                  "code": 200,
+                  "header": [],
+                  "body": ""
+                }
+              ]
+            },
+            {
+              "name": "Update lesson",
+              "request": {
+                "method": "PATCH",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/courses/{{courseId}}/modules/{{moduleId}}/lessons/{{lessonId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "courses", "{{courseId}}", "modules", "{{moduleId}}", "lessons", "{{lessonId}}"]
+                },
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"bpm\": 75,\n  \"difficulty\": 3,\n  \"preview\": true,\n  \"description\": \"Primera posición — practica con metrónomo a 75 bpm.\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": [
+                {
+                  "name": "200 – Lección actualizada",
+                  "status": "OK",
+                  "code": 200,
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"id\": \"l1000000-0000-0000-0000-000000000001\",\n  \"title\": \"Acorde de Do mayor\",\n  \"bpm\": 75,\n  \"difficulty\": 3,\n  \"preview\": true,\n  \"updatedAt\": \"2026-02-25T11:10:00.000Z\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Delete lesson",
+              "request": {
+                "method": "DELETE",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/courses/{{courseId}}/modules/{{moduleId}}/lessons/{{lessonId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "courses", "{{courseId}}", "modules", "{{moduleId}}", "lessons", "{{lessonId}}"]
+                },
+                "header": [
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "description": "Hard delete con CASCADE — elimina también los recursos de la lección."
+              },
+              "response": [
+                {
+                  "name": "200 – Eliminada (void)",
+                  "status": "OK",
+                  "code": 200,
+                  "header": [],
+                  "body": ""
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Resources",
+          "item": [
+            {
+              "name": "Create resource",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/lessons/{{lessonId}}/resources",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "lessons", "{{lessonId}}", "resources"]
+                },
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"TAB\",\n  \"title\": \"Tablatura Do mayor\",\n  \"url\": \"https://cdn.example.com/tabs/do-mayor.pdf\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "description": "Tipos disponibles: PDF | TAB | BACKING_TRACK\n\nOwnership verificado via JOIN lesson → module → course → teacherId."
+              },
+              "response": [
+                {
+                  "name": "201 – Recurso creado",
+                  "status": "Created",
+                  "code": 201,
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"id\": \"r1000000-0000-0000-0000-000000000001\",\n  \"lessonId\": \"l1000000-0000-0000-0000-000000000001\",\n  \"type\": \"TAB\",\n  \"title\": \"Tablatura Do mayor\",\n  \"url\": \"https://cdn.example.com/tabs/do-mayor.pdf\",\n  \"position\": 0,\n  \"createdAt\": \"2026-02-25T10:15:00.000Z\"\n}"
+                }
+              ]
+            },
+            {
+              "name": "Create resource – PDF",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/lessons/{{lessonId}}/resources",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "lessons", "{{lessonId}}", "resources"]
+                },
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"PDF\",\n  \"title\": \"Teoría del acorde mayor\",\n  \"url\": \"https://cdn.example.com/pdfs/teoria-mayor.pdf\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create resource – Backing Track",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/lessons/{{lessonId}}/resources",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "lessons", "{{lessonId}}", "resources"]
+                },
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"BACKING_TRACK\",\n  \"title\": \"Backing track C major — 60bpm\",\n  \"url\": \"https://cdn.example.com/backing/c-major-60bpm.mp3\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Reorder resources",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/lessons/{{lessonId}}/resources/reorder",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "lessons", "{{lessonId}}", "resources", "reorder"]
+                },
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ids\": [\n    \"r2000000-0000-0000-0000-000000000002\",\n    \"r1000000-0000-0000-0000-000000000001\"\n  ]\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": [
+                {
+                  "name": "200 – Reordenado (void)",
+                  "status": "OK",
+                  "code": 200,
+                  "header": [],
+                  "body": ""
+                }
+              ]
+            },
+            {
+              "name": "Update resource",
+              "request": {
+                "method": "PATCH",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/lessons/{{lessonId}}/resources/{{resourceId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "lessons", "{{lessonId}}", "resources", "{{resourceId}}"]
+                },
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Tablatura Do mayor — versión simplificada\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                }
+              },
+              "response": [
+                {
+                  "name": "200 – Recurso actualizado",
+                  "status": "OK",
+                  "code": 200,
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"id\": \"r1000000-0000-0000-0000-000000000001\",\n  \"type\": \"TAB\",\n  \"title\": \"Tablatura Do mayor — versión simplificada\",\n  \"url\": \"https://cdn.example.com/tabs/do-mayor.pdf\",\n  \"position\": 0\n}"
+                }
+              ]
+            },
+            {
+              "name": "Delete resource",
+              "request": {
+                "method": "DELETE",
+                "url": {
+                  "raw": "{{baseUrl}}/teacher/lessons/{{lessonId}}/resources/{{resourceId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["teacher", "lessons", "{{lessonId}}", "resources", "{{resourceId}}"]
+                },
+                "header": [
+                  { "key": "x-teacher-id", "value": "teacher-uuid-001" }
+                ]
+              },
+              "response": [
+                {
+                  "name": "200 – Eliminado (void)",
+                  "status": "OK",
+                  "code": 200,
+                  "header": [],
+                  "body": ""
+                }
+              ]
             }
           ]
         }

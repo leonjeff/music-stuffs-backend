@@ -51,7 +51,6 @@ export class VideoController {
    * GET /videos/:id/audio
    */
   @Get(':id/audio')
-  @Header('Cache-Control', 'public, max-age=31536000, immutable')
   @Header('Accept-Ranges', 'bytes')
   async getAudio(@Param('id') id: string) {
     return this.videoService.getAudioFile(id);
@@ -66,7 +65,7 @@ export class VideoController {
    * GET /videos/:id/waveform
    */
   @Get(':id/waveform')
-  @Header('Cache-Control', 'public, max-age=31536000, immutable')
+
   async getWaveform(@Param('id') id: string) {
     return this.videoService.getWaveformFile(id, 'high');
   }
@@ -78,7 +77,7 @@ export class VideoController {
    * GET /videos/:id/waveform/low
    */
   @Get(':id/waveform/low')
-  @Header('Cache-Control', 'public, max-age=31536000, immutable')
+
   async getWaveformLow(@Param('id') id: string) {
     return this.videoService.getWaveformFile(id, 'low');
   }
