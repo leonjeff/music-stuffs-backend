@@ -3,7 +3,6 @@ import {
   Controller,
   Delete,
   Get,
-  Headers,
   Param,
   Patch,
   Post,
@@ -18,8 +17,11 @@ import { UpdateLessonDto } from './dto/update-lesson.dto';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
 import { ReorderDto } from './dto/reorder.dto';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('teacher')
+@Roles('teacher', 'admin')
 export class CoursesController {
   constructor(private readonly coursesService: CoursesService) {}
 
@@ -27,20 +29,20 @@ export class CoursesController {
 
   @Post('courses')
   createCourse(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Body() dto: CreateCourseDto,
   ) {
     return this.coursesService.createCourse(teacherId, dto);
   }
 
   @Get('courses')
-  findCourses(@Headers('x-teacher-id') teacherId: string) {
+  findCourses(@CurrentUser('sub') teacherId: string) {
     return this.coursesService.findCoursesByTeacher(teacherId);
   }
 
   @Get('courses/:courseId')
   findCourse(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('courseId') courseId: string,
   ) {
     return this.coursesService.findCourseById(teacherId, courseId);
@@ -48,7 +50,7 @@ export class CoursesController {
 
   @Patch('courses/:courseId')
   updateCourse(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('courseId') courseId: string,
     @Body() dto: UpdateCourseDto,
   ) {
@@ -57,7 +59,7 @@ export class CoursesController {
 
   @Delete('courses/:courseId')
   deleteCourse(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('courseId') courseId: string,
   ) {
     return this.coursesService.deleteCourse(teacherId, courseId);
@@ -67,7 +69,7 @@ export class CoursesController {
 
   @Post('courses/:courseId/modules')
   createModule(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('courseId') courseId: string,
     @Body() dto: CreateModuleDto,
   ) {
@@ -76,7 +78,7 @@ export class CoursesController {
 
   @Get('courses/:courseId/modules')
   findModules(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('courseId') courseId: string,
   ) {
     return this.coursesService.findModulesByCourse(teacherId, courseId);
@@ -88,7 +90,7 @@ export class CoursesController {
    */
   @Post('courses/:courseId/modules/reorder')
   reorderModules(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('courseId') courseId: string,
     @Body() dto: ReorderDto,
   ) {
@@ -97,7 +99,7 @@ export class CoursesController {
 
   @Patch('courses/:courseId/modules/:moduleId')
   updateModule(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('courseId') courseId: string,
     @Param('moduleId') moduleId: string,
     @Body() dto: UpdateModuleDto,
@@ -107,7 +109,7 @@ export class CoursesController {
 
   @Delete('courses/:courseId/modules/:moduleId')
   deleteModule(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('courseId') courseId: string,
     @Param('moduleId') moduleId: string,
   ) {
@@ -118,7 +120,7 @@ export class CoursesController {
 
   @Post('courses/:courseId/modules/:moduleId/lessons')
   createLesson(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('courseId') courseId: string,
     @Param('moduleId') moduleId: string,
     @Body() dto: CreateLessonDto,
@@ -132,7 +134,7 @@ export class CoursesController {
    */
   @Post('courses/:courseId/modules/:moduleId/lessons/reorder')
   reorderLessons(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('courseId') courseId: string,
     @Param('moduleId') moduleId: string,
     @Body() dto: ReorderDto,
@@ -147,7 +149,7 @@ export class CoursesController {
 
   @Patch('courses/:courseId/modules/:moduleId/lessons/:lessonId')
   updateLesson(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('courseId') courseId: string,
     @Param('moduleId') moduleId: string,
     @Param('lessonId') lessonId: string,
@@ -164,7 +166,7 @@ export class CoursesController {
 
   @Delete('courses/:courseId/modules/:moduleId/lessons/:lessonId')
   deleteLesson(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('courseId') courseId: string,
     @Param('moduleId') moduleId: string,
     @Param('lessonId') lessonId: string,
@@ -181,7 +183,7 @@ export class CoursesController {
 
   @Post('lessons/:lessonId/resources')
   createResource(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('lessonId') lessonId: string,
     @Body() dto: CreateResourceDto,
   ) {
@@ -194,7 +196,7 @@ export class CoursesController {
    */
   @Post('lessons/:lessonId/resources/reorder')
   reorderResources(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('lessonId') lessonId: string,
     @Body() dto: ReorderDto,
   ) {
@@ -203,7 +205,7 @@ export class CoursesController {
 
   @Patch('lessons/:lessonId/resources/:resourceId')
   updateResource(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('lessonId') lessonId: string,
     @Param('resourceId') resourceId: string,
     @Body() dto: UpdateResourceDto,
@@ -218,7 +220,7 @@ export class CoursesController {
 
   @Delete('lessons/:lessonId/resources/:resourceId')
   deleteResource(
-    @Headers('x-teacher-id') teacherId: string,
+    @CurrentUser('sub') teacherId: string,
     @Param('lessonId') lessonId: string,
     @Param('resourceId') resourceId: string,
   ) {

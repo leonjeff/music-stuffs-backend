@@ -1,12 +1,10 @@
 import {
   IsBoolean,
-  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   MaxLength,
   Min,
-  ValidateIf,
   ValidationArguments,
   ValidatorConstraint,
   ValidatorConstraintInterface,
@@ -40,10 +38,6 @@ function IsAfterStart(validationOptions?: ValidationOptions) {
 }
 
 export class CreateLoopDto {
-  @IsString()
-  @IsNotEmpty()
-  userId: string;
-
   @IsNumber()
   @Min(0)
   startTime: number;

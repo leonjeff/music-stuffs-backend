@@ -2,7 +2,6 @@ import {
   Controller,
   Get,
   Header,
-  Headers,
   Param,
   Post,
   UploadedFile,
@@ -10,6 +9,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { VideoService } from './video.service';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('videos')
 export class VideoController {
@@ -18,10 +19,11 @@ export class VideoController {
   // ─── Upload ────────────────────────────────────────────────────────────────
 
   @Post('upload')
+  @Roles('teacher', 'admin')
   @UseInterceptors(FileInterceptor('file'))
   async uploadVideo(
     @UploadedFile() file: Express.Multer.File,
-    @Headers('x-teacher-id') teacherId?: string,
+    @CurrentUser('sub') teacherId: string,
   ) {
     return this.videoService.handleUpload(file, teacherId);
   }
@@ -65,7 +67,6 @@ export class VideoController {
    * GET /videos/:id/waveform
    */
   @Get(':id/waveform')
-
   async getWaveform(@Param('id') id: string) {
     return this.videoService.getWaveformFile(id, 'high');
   }
@@ -77,7 +78,6 @@ export class VideoController {
    * GET /videos/:id/waveform/low
    */
   @Get(':id/waveform/low')
-
   async getWaveformLow(@Param('id') id: string) {
     return this.videoService.getWaveformFile(id, 'low');
   }

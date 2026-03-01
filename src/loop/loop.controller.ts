@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { LoopService } from './loop.service';
 import { CreateLoopDto } from './dto/create-loop.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('video/:videoId/loops')
 export class LoopController {
@@ -16,9 +17,10 @@ export class LoopController {
   @Post()
   async createLoop(
     @Param('videoId') videoId: string,
+    @CurrentUser('sub') userId: string,
     @Body() dto: CreateLoopDto,
   ) {
-    return this.loopService.create(videoId, dto);
+    return this.loopService.create(videoId, userId, dto);
   }
 
   @Get()

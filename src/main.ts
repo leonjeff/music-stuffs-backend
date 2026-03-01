@@ -3,9 +3,12 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import * as express from 'express';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  app.use(helmet());
 
   const origin = process.env.CORS_ORIGIN ?? '*';
 
@@ -16,7 +19,6 @@ async function bootstrap() {
     allowedHeaders: [
       'Content-Type',
       'Authorization',
-      'x-teacher-id',
       'Range',         // requerido para streaming de audio/video (range requests)
       'Origin',
       'Accept',

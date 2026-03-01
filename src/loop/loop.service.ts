@@ -21,7 +21,7 @@ export class LoopService {
     private readonly videoRepository: Repository<Video>,
   ) {}
 
-  async create(videoId: string, dto: CreateLoopDto): Promise<Loop> {
+  async create(videoId: string, userId: string, dto: CreateLoopDto): Promise<Loop> {
     const video = await this.videoRepository.findOneBy({ id: videoId });
 
     if (!video) {
@@ -42,7 +42,7 @@ export class LoopService {
 
     const loop = this.loopRepository.create({
       videoId,
-      userId: dto.userId,
+      userId,
       startTime: dto.startTime,
       endTime: dto.endTime,
       label: dto.label ?? null,
@@ -51,7 +51,7 @@ export class LoopService {
     });
 
     const saved = await this.loopRepository.save(loop);
-    this.logger.log(`Loop ${saved.id} creado para video ${videoId} por usuario ${dto.userId}`);
+    this.logger.log(`Loop ${saved.id} creado para video ${videoId} por usuario ${userId}`);
     return saved;
   }
 
