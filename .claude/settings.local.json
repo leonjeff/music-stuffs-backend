@@ -7,7 +7,22 @@
       "Bash(netstat -ano)",
       "Bash(PGPASSWORD=\"jhYj4hUYJBpK6Q3f2Khk\" psql -U postgres -c \"CREATE DATABASE music_stuffs;\")",
       "Bash(PGPASSWORD=\"jhYj4hUYJBpK6Q3f2Khk\" \"/c/Program Files/PostgreSQL/18/bin/psql.exe\" -U postgres -c \"CREATE DATABASE music_stuffs;\")",
-      "Read(//c/Users/jeffj/.claude/projects/c--Users-jeffj-Desktop-Proyectos-MS-music-stuffs-backend/memory/**)"
+      "Read(//c/Users/jeffj/.claude/projects/c--Users-jeffj-Desktop-Proyectos-MS-music-stuffs-backend/memory/**)",
+      "Bash(tasklist)",
+      "Bash(PGPASSWORD=jhYj4hUYJBpK6Q3f2Khk psql -h localhost -p 5432 -U postgres -d music_stuffs -c \"UPDATE video SET status = ''failed'' WHERE id = ''95c19003-68b0-4fc1-8c48-aa145623fb6c'';\")",
+      "Read(//c/Program Files/PostgreSQL/**)",
+      "Bash(PGPASSWORD=jhYj4hUYJBpK6Q3f2Khk \"/c/Program Files/PostgreSQL/18/bin/psql\" -h localhost -p 5432 -U postgres -d music_stuffs -c \"UPDATE video SET status = ''failed'' WHERE id = ''95c19003-68b0-4fc1-8c48-aa145623fb6c'';\")",
+      "Bash(PGPASSWORD=jhYj4hUYJBpK6Q3f2Khk \"/c/Program Files/PostgreSQL/18/bin/psql\" -h localhost -p 5432 -U postgres -d music_stuffs -c \"SELECT id, status, \"\"originalFilename\"\", \"\"createdBy\"\", \"\"createdAt\"\" FROM video ORDER BY \"\"createdAt\"\" DESC LIMIT 10;\")",
+      "Read(//c/ffmpeg/**)",
+      "Bash(cmd.exe /c \"where ffprobe 2>nul & where ffmpeg 2>nul & dir C:\\\\ffmpeg\\\\bin\\\\ffprobe.exe 2>nul & dir \"\"C:\\\\Program Files\\\\ffmpeg\\\\bin\\\\ffprobe.exe\"\" 2>nul\")",
+      "Bash(winget install Gyan.FFmpeg)",
+      "Bash(winget install Gyan.FFmpeg --accept-source-agreements --accept-package-agreements)",
+      "Bash(cmd.exe /c \"where ffprobe && ffprobe -version 2>&1 | head -1\")",
+      "Bash(cmd.exe /c \"refreshenv 2>nul & where ffprobe 2>&1\")",
+      "Read(//c/Users/jeffj/AppData/Local/Microsoft/WinGet/Packages//**)",
+      "Read(//c/Users/jeffj/AppData/Local/Programs//**)",
+      "Bash(winget search audiowaveform --accept-source-agreements)",
+      "Bash(winget install BBC.audiowaveform --accept-source-agreements --accept-package-agreements)"
     ]
   }
 }
