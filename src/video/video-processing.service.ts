@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -64,6 +65,18 @@ const LONG_VIDEO_THRESHOLD_SECONDS = 3_600;
 @Injectable()
 export class VideoProcessingService {
   private readonly logger = new Logger(VideoProcessingService.name);
+  private readonly ffmpegBin: string;
+  private readonly audiowaveformBin: string;
+
+  constructor(private readonly configService: ConfigService) {
+    const binDir = this.configService.get<string>('FFMPEG_BIN_DIR') ?? '';
+    this.ffmpegBin = binDir ? binDir + path.sep : '';
+    this.audiowaveformBin = this.configService.get<string>('AUDIOWAVEFORM_BIN') ?? 'audiowaveform';
+    if (this.ffmpegBin) {
+      this.logger.log(`FFMPEG_BIN_DIR: ${this.ffmpegBin}`);
+    }
+    this.logger.log(`audiowaveform: ${this.audiowaveformBin}`);
+  }
 
   // ─── Metadata ──────────────────────────────────────────────────────────────
 
@@ -72,8 +85,9 @@ export class VideoProcessingService {
    * Usa `format.duration` de ffprobe (mayor precisión que stream.duration).
    */
   async getVideoMetadata(inputPath: string): Promise<VideoMetadata> {
+    this.logger.log(`ffprobe iniciado: ${inputPath}`);
     return new Promise((resolve, reject) => {
-      const ffprobe = spawn('ffprobe', [
+      const ffprobe = spawn(this.ffmpegBin + 'ffprobe', [
         '-v', 'quiet',
         '-print_format', 'json',
         '-show_streams',
@@ -81,10 +95,15 @@ export class VideoProcessingService {
         inputPath,
       ]);
 
+      ffprobe.on('error', (err) => {
+        reject(new Error(`ffprobe no pudo iniciarse: ${err.message}`));
+      });
+
       let output = '';
       ffprobe.stdout.on('data', (data: Buffer) => { output += data.toString(); });
 
       ffprobe.on('close', (code: number) => {
+        this.logger.log(`ffprobe cerrado con código ${code}`);
         if (code !== 0) {
           return reject(new Error(`ffprobe terminó con código ${code}`));
         }
@@ -348,7 +367,7 @@ export class VideoProcessingService {
     audioPath: string,
     outputDir: string,
     durationSeconds: number,
-  ): Promise<WaveformResult> {
+  ): Promise<WaveformResult | null> {
     const spp = VideoProcessingService.calculateSamplesPerPixel(durationSeconds);
     const isLong = durationSeconds > LONG_VIDEO_THRESHOLD_SECONDS;
 
@@ -358,15 +377,23 @@ export class VideoProcessingService {
         : `Waveform single-res [${durationSeconds.toFixed(3)}s] spp=${spp.high}`,
     );
 
-    if (isLong) {
-      // Secuencial — evita dos procesos audiowaveform compitiendo por RAM
-      await this.runAudiowaveform(audioPath, path.join(outputDir, 'waveform-low.json'),  spp.low);
-      await this.runAudiowaveform(audioPath, path.join(outputDir, 'waveform-high.json'), spp.high);
-      return { waveformFile: 'waveform-high.json', waveformLowFile: 'waveform-low.json' };
-    }
+    try {
+      if (isLong) {
+        await this.runAudiowaveform(audioPath, path.join(outputDir, 'waveform-low.json'),  spp.low);
+        await this.runAudiowaveform(audioPath, path.join(outputDir, 'waveform-high.json'), spp.high);
+        return { waveformFile: 'waveform-high.json', waveformLowFile: 'waveform-low.json' };
+      }
 
-    await this.runAudiowaveform(audioPath, path.join(outputDir, 'waveform.json'), spp.high);
-    return { waveformFile: 'waveform.json' };
+      await this.runAudiowaveform(audioPath, path.join(outputDir, 'waveform.json'), spp.high);
+      return { waveformFile: 'waveform.json' };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT' ||
+          (err as Error).message.includes('ENOENT')) {
+        this.logger.warn('audiowaveform no está instalado — waveform omitido');
+        return null;
+      }
+      throw err;
+    }
   }
 
   // ─── Limpieza ──────────────────────────────────────────────────────────────
@@ -385,19 +412,31 @@ export class VideoProcessingService {
   // ─── Helpers privados ──────────────────────────────────────────────────────
 
   private runFFmpeg(args: string[], label: string): Promise<void> {
+    this.logger.log(`FFmpeg [${label}] iniciado`);
     return new Promise((resolve, reject) => {
       let stderr = '';
-      const proc = spawn('ffmpeg', args);
+      const proc = spawn(this.ffmpegBin + 'ffmpeg', args);
+
+      proc.on('error', (err) => {
+        reject(new Error(`FFmpeg [${label}] no pudo iniciarse: ${err.message}`));
+      });
 
       proc.stderr.on('data', (data: Buffer) => {
-        stderr += data.toString();
-        this.logger.verbose(`FFmpeg [${label}]: ${data}`);
+        const chunk = data.toString();
+        stderr += chunk;
+        if (chunk.includes('Error') || chunk.includes('Invalid')) {
+          this.logger.warn(`FFmpeg [${label}]: ${chunk.trim()}`);
+        } else {
+          this.logger.debug(`FFmpeg [${label}]: ${chunk.trim()}`);
+        }
       });
 
       proc.on('close', (code: number) => {
         if (code === 0) {
+          this.logger.log(`FFmpeg [${label}] completado`);
           resolve();
         } else {
+          this.logger.error(`FFmpeg [${label}] falló (código ${code}): ${stderr.slice(-600)}`);
           reject(new Error(
             `FFmpeg [${label}] terminó con código ${code}: ${stderr.slice(-400)}`,
           ));
@@ -411,24 +450,31 @@ export class VideoProcessingService {
     outputPath: string,
     samplesPerPixel: number,
   ): Promise<void> {
+    this.logger.log(`audiowaveform iniciado [spp=${samplesPerPixel}]: ${outputPath}`);
     return new Promise((resolve, reject) => {
       let stderr = '';
-      const proc = spawn('audiowaveform', [
+      const proc = spawn(this.audiowaveformBin, [
         '-i', inputPath,
         '-o', outputPath,
         '--zoom', String(samplesPerPixel),
         '--bits', '8',
       ]);
 
+      proc.on('error', (err) => {
+        reject(new Error(`audiowaveform no pudo iniciarse: ${err.message}`));
+      });
+
       proc.stderr.on('data', (data: Buffer) => {
         stderr += data.toString();
-        this.logger.verbose(`audiowaveform [spp=${samplesPerPixel}]: ${data}`);
+        this.logger.debug(`audiowaveform [spp=${samplesPerPixel}]: ${data.toString().trim()}`);
       });
 
       proc.on('close', (code: number) => {
         if (code === 0) {
+          this.logger.log(`audiowaveform completado [spp=${samplesPerPixel}]`);
           resolve();
         } else {
+          this.logger.warn(`audiowaveform falló (spp=${samplesPerPixel}, código=${code}): ${stderr.slice(-300)}`);
           reject(new Error(
             `audiowaveform falló (spp=${samplesPerPixel}, código=${code}): ${stderr.slice(-300)}`,
           ));

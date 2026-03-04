@@ -16,6 +16,18 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 export class VideoController {
   constructor(private readonly videoService: VideoService) {}
 
+  // ─── Listado ───────────────────────────────────────────────────────────────
+
+  /** GET /videos — teacher ve sus propios videos; admin ve todos */
+  @Get()
+  @Roles('teacher', 'admin')
+  async findAll(
+    @CurrentUser('sub') requesterId: string,
+    @CurrentUser('roles') roles: string[],
+  ) {
+    return this.videoService.findAll(requesterId, roles ?? []);
+  }
+
   // ─── Upload ────────────────────────────────────────────────────────────────
 
   @Post('upload')

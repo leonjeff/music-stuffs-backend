@@ -56,6 +56,24 @@ export class VideoService {
 
   // ─── Consultas ────────────────────────────────────────────────────────────
 
+  async findAll(requesterId: string, roles: string[]) {
+    const isAdmin = roles.includes('admin');
+    const where = isAdmin ? {} : { createdBy: requesterId };
+    const videos = await this.videoRepository.find({
+      where,
+      order: { createdAt: 'DESC' },
+    });
+    return videos.map((v) => ({
+      id:               v.id,
+      status:           v.status,
+      originalFilename: v.originalFilename,
+      durationMs:       v.durationMs,
+      resolution:       v.resolution,
+      thumbnailPath:    v.thumbnailPath,
+      createdAt:        v.createdAt,
+    }));
+  }
+
   async findById(id: string) {
     return this.videoRepository.findOneByOrFail({ id });
   }
@@ -151,14 +169,15 @@ export class VideoService {
   // ─── Procesamiento en background ──────────────────────────────────────────
 
   private async processInBackground(videoId: string, tempPath: string): Promise<void> {
+    this.logger.log(`[${videoId}] processInBackground iniciado — temp: ${tempPath}`);
     const video = await this.videoRepository.findOneBy({ id: videoId });
     if (!video || video.status !== 'processing') {
-      this.logger.warn(`Video ${videoId} no está en estado 'processing' — abortando`);
+      this.logger.warn(`[${videoId}] no está en estado 'processing' — abortando`);
       return;
     }
 
     if (video.processingAttempts >= MAX_PROCESSING_ATTEMPTS) {
-      this.logger.error(`Video ${videoId} alcanzó el límite de ${MAX_PROCESSING_ATTEMPTS} intentos`);
+      this.logger.error(`[${videoId}] alcanzó el límite de ${MAX_PROCESSING_ATTEMPTS} intentos`);
       await this.videoRepository.update(videoId, { status: 'failed' });
       return;
     }
@@ -169,66 +188,84 @@ export class VideoService {
 
     const baseDir   = this.configService.get<string>('VIDEO_BASE_DIR') ?? '/tmp/music-stuffs/videos';
     const outputDir = path.join(baseDir, videoId);
+    this.logger.log(`[${videoId}] outputDir: ${outputDir}`);
 
     try {
       // 1. Crear directorio de salida
+      this.logger.log(`[${videoId}] Paso 1: creando directorio ${outputDir}`);
       await fs.promises.mkdir(outputDir, { recursive: true });
+      this.logger.log(`[${videoId}] Paso 1 OK`);
 
       // 2. Extraer y validar metadata (precisión de milisegundos)
+      this.logger.log(`[${videoId}] Paso 2: extrayendo metadata de ${tempPath}`);
       const metadata = await this.videoProcessingService.getVideoMetadata(tempPath);
-
       this.logger.log(
-        `Video ${videoId} (intento ${video.processingAttempts + 1}) ` +
+        `[${videoId}] Paso 2 OK (intento ${video.processingAttempts + 1}) ` +
         `— ${metadata.durationMs} ms | ${metadata.resolution} | audio=${metadata.hasAudio}`,
       );
 
       // 3. Generar HLS (single-quality, flat — sin subdirectorios)
+      this.logger.log(`[${videoId}] Paso 3: generando HLS`);
       await this.videoProcessingService.processToHLS(tempPath, outputDir, metadata);
 
       if (!fs.existsSync(path.join(outputDir, 'index.m3u8'))) {
         throw new Error('index.m3u8 no fue generado por FFmpeg');
       }
+      this.logger.log(`[${videoId}] Paso 3 OK: HLS generado`);
 
       // 4. Thumbnail
+      this.logger.log(`[${videoId}] Paso 4: generando thumbnail`);
       await this.videoProcessingService.generateThumbnail(tempPath, outputDir);
+      this.logger.log(`[${videoId}] Paso 4 OK`);
 
       // 5. Audio WAV (PCM, 44.1 kHz, 16-bit, estéreo) + Waveform
       let waveformResult: WaveformResult | null = null;
 
       if (metadata.hasAudio) {
+        this.logger.log(`[${videoId}] Paso 5: extrayendo audio WAV`);
         await this.videoProcessingService.extractAudio(tempPath, outputDir);
 
         const audioWavPath = path.join(outputDir, 'audio.wav');
         if (!fs.existsSync(audioWavPath)) {
           throw new Error('audio.wav no fue generado por FFmpeg');
         }
+        this.logger.log(`[${videoId}] Paso 5 OK`);
 
+        this.logger.log(`[${videoId}] Paso 5b: generando waveform`);
         waveformResult = await this.videoProcessingService.generateOptimizedWaveform(
           audioWavPath,
           outputDir,
           metadata.durationSeconds,
         );
 
-        if (!fs.existsSync(path.join(outputDir, waveformResult.waveformFile))) {
-          throw new Error(`${waveformResult.waveformFile} no fue generado por audiowaveform`);
-        }
-        if (
-          waveformResult.waveformLowFile &&
-          !fs.existsSync(path.join(outputDir, waveformResult.waveformLowFile))
-        ) {
-          throw new Error(`${waveformResult.waveformLowFile} no fue generado por audiowaveform`);
+        if (waveformResult) {
+          if (!fs.existsSync(path.join(outputDir, waveformResult.waveformFile))) {
+            throw new Error(`${waveformResult.waveformFile} no fue generado por audiowaveform`);
+          }
+          if (
+            waveformResult.waveformLowFile &&
+            !fs.existsSync(path.join(outputDir, waveformResult.waveformLowFile))
+          ) {
+            throw new Error(`${waveformResult.waveformLowFile} no fue generado por audiowaveform`);
+          }
+          this.logger.log(`[${videoId}] Paso 5b OK`);
+        } else {
+          this.logger.log(`[${videoId}] Paso 5b SKIP: audiowaveform no disponible`);
         }
       }
 
       // 6. metadata.json — información técnica para el frontend
+      this.logger.log(`[${videoId}] Paso 6: generando metadata.json`);
       await this.videoProcessingService.generateMetadataFile(
         videoId,
         outputDir,
         metadata,
         video.originalFilename,
       );
+      this.logger.log(`[${videoId}] Paso 6 OK`);
 
       // 7. Persistir rutas relativas en BD
+      this.logger.log(`[${videoId}] Paso 7: guardando en BD`);
       await this.videoRepository.update(videoId, {
         status:          'ready',
         durationMs:      metadata.durationMs,
@@ -244,7 +281,7 @@ export class VideoService {
           : undefined,
       });
 
-      this.logger.log(`Video ${videoId} procesado correctamente`);
+      this.logger.log(`[${videoId}] Video procesado correctamente`);
     } catch (err) {
       this.logger.error(
         `Error procesando video ${videoId} (intento ${video.processingAttempts + 1}): ${(err as Error).message}`,
