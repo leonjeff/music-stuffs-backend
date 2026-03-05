@@ -238,20 +238,16 @@ export class VideoService {
           metadata.durationSeconds,
         );
 
-        if (waveformResult) {
-          if (!fs.existsSync(path.join(outputDir, waveformResult.waveformFile))) {
-            throw new Error(`${waveformResult.waveformFile} no fue generado por audiowaveform`);
-          }
-          if (
-            waveformResult.waveformLowFile &&
-            !fs.existsSync(path.join(outputDir, waveformResult.waveformLowFile))
-          ) {
-            throw new Error(`${waveformResult.waveformLowFile} no fue generado por audiowaveform`);
-          }
-          this.logger.log(`[${videoId}] Paso 5b OK`);
-        } else {
-          this.logger.log(`[${videoId}] Paso 5b SKIP: audiowaveform no disponible`);
+        if (!fs.existsSync(path.join(outputDir, waveformResult.waveformFile))) {
+          throw new Error(`${waveformResult.waveformFile} no fue generado`);
         }
+        if (
+          waveformResult.waveformLowFile &&
+          !fs.existsSync(path.join(outputDir, waveformResult.waveformLowFile))
+        ) {
+          throw new Error(`${waveformResult.waveformLowFile} no fue generado`);
+        }
+        this.logger.log(`[${videoId}] Paso 5b OK`);
       }
 
       // 6. metadata.json — información técnica para el frontend
