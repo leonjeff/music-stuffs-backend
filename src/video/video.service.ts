@@ -219,7 +219,7 @@ export class VideoService {
       this.logger.log(`[${videoId}] Paso 4 OK`);
 
       // 5. Audio WAV (PCM, 44.1 kHz, 16-bit, estéreo) + Waveform
-      let waveformResult: WaveformResult | null = null;
+      let waveformResult: WaveformResult | undefined;
 
       if (metadata.hasAudio) {
         this.logger.log(`[${videoId}] Paso 5: extrayendo audio WAV`);
@@ -239,13 +239,13 @@ export class VideoService {
         );
 
         if (!fs.existsSync(path.join(outputDir, waveformResult.waveformFile))) {
-          throw new Error(`${waveformResult.waveformFile} no fue generado`);
+          throw new Error(`${waveformResult.waveformFile} no fue generado por audiowaveform`);
         }
         if (
           waveformResult.waveformLowFile &&
           !fs.existsSync(path.join(outputDir, waveformResult.waveformLowFile))
         ) {
-          throw new Error(`${waveformResult.waveformLowFile} no fue generado`);
+          throw new Error(`${waveformResult.waveformLowFile} no fue generado por audiowaveform`);
         }
         this.logger.log(`[${videoId}] Paso 5b OK`);
       }

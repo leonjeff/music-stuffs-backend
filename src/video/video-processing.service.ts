@@ -436,29 +436,7 @@ export class VideoProcessingService {
     });
   }
 
-  private async runAudiowaveform(
-    inputPath: string,
-    outputPath: string,
-    samplesPerPixel: number,
-  ): Promise<void> {
-    // Intentar con audiowaveform nativo; si no está, generar con FFmpeg
-    const available = await this.isAudiowaveformAvailable();
-    if (available) {
-      return this.runAudiowaveformNative(inputPath, outputPath, samplesPerPixel);
-    }
-    this.logger.warn(`audiowaveform no disponible — generando waveform con FFmpeg [spp=${samplesPerPixel}]`);
-    return this.generateWaveformWithFFmpeg(inputPath, outputPath, samplesPerPixel);
-  }
-
-  private async isAudiowaveformAvailable(): Promise<boolean> {
-    return new Promise((resolve) => {
-      const proc = spawn(this.audiowaveformBin, ['--version']);
-      proc.on('error', () => resolve(false));
-      proc.on('close', (code) => resolve(code === 0));
-    });
-  }
-
-  private runAudiowaveformNative(
+  private runAudiowaveform(
     inputPath: string,
     outputPath: string,
     samplesPerPixel: number,
@@ -473,96 +451,24 @@ export class VideoProcessingService {
         '--bits', '8',
       ]);
 
-      proc.on('error', (err) => reject(new Error(`audiowaveform: ${err.message}`)));
-      proc.stderr.on('data', (data: Buffer) => { stderr += data.toString(); });
+      proc.on('error', (err) => {
+        reject(new Error(`audiowaveform no pudo iniciarse: ${err.message}`));
+      });
+
+      proc.stderr.on('data', (data: Buffer) => {
+        stderr += data.toString();
+        this.logger.debug(`audiowaveform [spp=${samplesPerPixel}]: ${data.toString().trim()}`);
+      });
+
       proc.on('close', (code: number) => {
         if (code === 0) {
           this.logger.log(`audiowaveform completado [spp=${samplesPerPixel}]`);
           resolve();
         } else {
-          reject(new Error(`audiowaveform falló (código=${code}): ${stderr.slice(-300)}`));
-        }
-      });
-    });
-  }
-
-  /**
-   * Genera waveform JSON compatible con audiowaveform usando FFmpeg.
-   * Exporta PCM mono s16le y calcula picos min/max por cada samplesPerPixel muestras.
-   */
-  private generateWaveformWithFFmpeg(
-    inputPath: string,
-    outputPath: string,
-    samplesPerPixel: number,
-  ): Promise<void> {
-    this.logger.log(`FFmpeg waveform [spp=${samplesPerPixel}]: ${outputPath}`);
-    return new Promise((resolve, reject) => {
-      const proc = spawn(this.ffmpegBin + 'ffmpeg', [
-        '-i', inputPath,
-        '-ac', '1',
-        '-ar', '44100',
-        '-f', 's16le',
-        '-acodec', 'pcm_s16le',
-        'pipe:1',
-      ]);
-
-      const BYTES_PER_SAMPLE = 2;
-      const chunkBytes = samplesPerPixel * BYTES_PER_SAMPLE;
-      let leftover = Buffer.alloc(0);
-      const peaks: number[] = [];
-
-      proc.stdout.on('data', (data: Buffer) => {
-        const buf = leftover.length > 0 ? Buffer.concat([leftover, data]) : data;
-        let offset = 0;
-
-        while (offset + chunkBytes <= buf.length) {
-          let min = 0, max = 0;
-          for (let i = 0; i < samplesPerPixel; i++) {
-            const s = buf.readInt16LE(offset + i * BYTES_PER_SAMPLE);
-            const n = Math.round(s / 256);
-            if (n < min) min = n;
-            if (n > max) max = n;
-          }
-          peaks.push(min, max);
-          offset += chunkBytes;
-        }
-        leftover = buf.slice(offset);
-      });
-
-      proc.stderr.on('data', () => {}); // suprimir progress de FFmpeg
-      proc.on('error', (err) => reject(new Error(`FFmpeg waveform: ${err.message}`)));
-      proc.on('close', async (code) => {
-        if (code !== 0) return reject(new Error(`FFmpeg waveform exit ${code}`));
-
-        // Procesar muestras sobrantes
-        if (leftover.length >= BYTES_PER_SAMPLE) {
-          let min = 0, max = 0;
-          const n = Math.floor(leftover.length / BYTES_PER_SAMPLE);
-          for (let i = 0; i < n; i++) {
-            const s = leftover.readInt16LE(i * BYTES_PER_SAMPLE);
-            const norm = Math.round(s / 256);
-            if (norm < min) min = norm;
-            if (norm > max) max = norm;
-          }
-          peaks.push(min, max);
-        }
-
-        const waveform = {
-          version: 2,
-          channels: 1,
-          sample_rate: 44100,
-          samples_per_pixel: samplesPerPixel,
-          bits: 8,
-          length: peaks.length / 2,
-          data: peaks,
-        };
-
-        try {
-          await fs.promises.writeFile(outputPath, JSON.stringify(waveform));
-          this.logger.log(`FFmpeg waveform completado [${peaks.length / 2} pts]`);
-          resolve();
-        } catch (err) {
-          reject(err);
+          this.logger.warn(`audiowaveform falló (spp=${samplesPerPixel}, código=${code}): ${stderr.slice(-300)}`);
+          reject(new Error(
+            `audiowaveform falló (spp=${samplesPerPixel}, código=${code}): ${stderr.slice(-300)}`,
+          ));
         }
       });
     });
