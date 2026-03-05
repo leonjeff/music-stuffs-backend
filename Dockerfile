@@ -5,14 +5,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     wget \
     ca-certificates \
-    libboost-filesystem1.74.0 \
-    libboost-program-options1.74.0 \
-    libid3tag0 \
-    libmad0 \
-    libsndfile1 \
-    libgd3 \
     && wget "https://github.com/bbc/audiowaveform/releases/download/1.10.1/audiowaveform_1.10.1-1-12_amd64.deb" -O /tmp/aw.deb \
-    && dpkg -i /tmp/aw.deb \
+    && apt-get install -y --no-install-recommends /tmp/aw.deb \
     && rm /tmp/aw.deb \
     && apt-get purge -y --auto-remove wget \
     && rm -rf /var/lib/apt/lists/*
